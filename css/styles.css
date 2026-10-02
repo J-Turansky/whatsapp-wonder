@@ -34,13 +34,17 @@ button {
   outline-offset: 2px;
 }
 
+.info-btn:focus-visible {
+  outline-color: #fff;
+}
+
 /* Header */
 .app-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  background: var(--accent);
+  background: var(--accent-dark);
   color: #fff;
   padding: 1.25rem 1.5rem;
 }

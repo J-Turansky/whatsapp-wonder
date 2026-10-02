@@ -12,6 +12,7 @@ const changelogList = document.getElementById("changelog-list");
 
 const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
 const panels = Array.from(document.querySelectorAll('[role="tabpanel"]'));
+const panelWrapper = document.querySelector(".tabpanel-wrapper");
 
 function renderChangelog() {
   if (!changelogList) return;
@@ -56,6 +57,9 @@ function selectTab(tab) {
     }
   });
 
+  if (panelWrapper) {
+    panelWrapper.scrollTop = 0;
+  }
   tab.focus();
 }
 
@@ -68,6 +72,10 @@ tabs.forEach((tab, index) => {
       newIndex = (index + 1) % tabs.length;
     } else if (event.key === "ArrowLeft") {
       newIndex = (index - 1 + tabs.length) % tabs.length;
+    } else if (event.key === "Home") {
+      newIndex = 0;
+    } else if (event.key === "End") {
+      newIndex = tabs.length - 1;
     }
     if (newIndex !== null) {
       event.preventDefault();
@@ -78,8 +86,8 @@ tabs.forEach((tab, index) => {
 
 function openDialog() {
   const howTab = document.getElementById("tab-how");
-  selectTab(howTab);
   dialog.showModal();
+  selectTab(howTab);
 }
 
 function closeDialog() {
