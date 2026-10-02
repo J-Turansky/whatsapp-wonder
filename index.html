@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WhatsApp Wonder</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header-text">
+      <h1>WhatsApp Wonder</h1>
+      <p class="tagline">Turn your WhatsApp chat export into stats, fun facts and a story, all inside your browser.</p>
+    </div>
+    <button id="info-btn" class="info-btn" type="button" aria-label="About and help">
+      <span aria-hidden="true">i</span>
+    </button>
+  </header>
+
+  <main id="app-main">
+    <div class="empty-state card">
+      <h2>Import is coming next</h2>
+      <p>Soon you'll be able to drop in your exported chat right here.</p>
+      <p class="privacy-note">Your chat is processed only on this device. Nothing is uploaded.</p>
+    </div>
+  </main>
+
+  <div class="version-badge" id="version-badge">v1.0.0</div>
+
+  <dialog id="info-dialog" aria-labelledby="info-dialog-title">
+    <div class="dialog-header">
+      <h2 id="info-dialog-title">About WhatsApp Wonder</h2>
+      <button id="close-dialog-btn" class="close-btn" type="button" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="tablist" role="tablist" aria-label="Help topics">
+      <button class="tab" role="tab" id="tab-how" aria-controls="panel-how" aria-selected="true" type="button">How to use</button>
+      <button class="tab" role="tab" id="tab-new" aria-controls="panel-new" aria-selected="false" type="button" tabindex="-1">What's new</button>
+      <button class="tab" role="tab" id="tab-arch" aria-controls="panel-arch" aria-selected="false" type="button" tabindex="-1">Architecture</button>
+    </div>
+
+    <div class="tabpanel-wrapper">
+      <div class="tabpanel" id="panel-how" role="tabpanel" aria-labelledby="tab-how" tabindex="0">
+        <p class="about-paragraph">
+          WhatsApp Wonder turns an exported WhatsApp chat into stats, fun facts and a story &mdash;
+          entirely inside your browser. It runs 100% in-browser: there are no uploads, no tracking
+          and no AI services involved.
+        </p>
+        <ol>
+          <li>In WhatsApp, open the chat, then <strong>More</strong>, then <strong>Export chat</strong>, and choose <strong>Without media</strong>.</li>
+          <li>Save or unzip the <code>.txt</code> file.</li>
+          <li>Import it here, or paste the text (coming in the next update).</li>
+          <li>Explore stats, fun facts and the chat story.</li>
+        </ol>
+      </div>
+
+      <div class="tabpanel" id="panel-new" role="tabpanel" aria-labelledby="tab-new" tabindex="0" hidden>
+        <ul class="changelog-list" id="changelog-list"></ul>
+      </div>
+
+      <div class="tabpanel" id="panel-arch" role="tabpanel" aria-labelledby="tab-arch" tabindex="0" hidden>
+        <div class="architecture-diagram">
+          <div class="browser-box">
+            <p class="browser-label">Your browser</p>
+            <div class="flow">
+              <div class="flow-box">Chat .txt / pasted text</div>
+              <div class="flow-arrow" aria-hidden="true">&rarr;</div>
+              <div class="flow-box">Parser</div>
+              <div class="flow-arrow" aria-hidden="true">&rarr;</div>
+              <div class="flow-box">Stats engine</div>
+              <div class="flow-arrow" aria-hidden="true">&rarr;</div>
+              <div class="flow-box">Views<br><span class="flow-sub">(Dashboard, Fun facts, Story)</span></div>
+            </div>
+          </div>
+        </div>
+        <ul class="tech-notes">
+          <li>Plain HTML, CSS and JavaScript using ES modules &mdash; no frameworks.</li>
+          <li>No libraries or CDNs; every file is served from this site.</li>
+          <li>No network calls are made with your chat data.</li>
+          <li>Hosted as a static site on GitHub Pages.</li>
+        </ul>
+      </div>
+    </div>
+  </dialog>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
