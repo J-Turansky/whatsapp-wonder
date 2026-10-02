@@ -1,6 +1,7 @@
-export const VERSION = "1.3.0";
+export const VERSION = "1.4.0";
 
 export const CHANGELOG = [
+  { version: "1.4.0", date: "2026-10-02", notes: ["Added a weekly activity heatmap and trend, cautious conversation handoff patterns, a private printable report, and links from highlights to their supporting messages."] },
   { version: "1.3.0", date: "2026-10-02", notes: ["Import WhatsApp ZIPs locally, review import quality and date order, apply shared date and participant filters, and search and browse messages."] },
   { version: "1.2.0", date: "2026-10-02", notes: ["Added Stats for participant activity and top words/emoji, Awards for fact-backed chat highlights, and Story with a local activity summary and monthly timeline."] },
   { version: "1.1.0", date: "2026-10-02", notes: ["Import a WhatsApp chat: pick, drop or paste your exported _chat.txt (Android or iPhone) and see a quick summary. Everything stays on your device."] },
