@@ -122,7 +122,7 @@ main {
 }
 
 /* Dialog */
-dialog#info-dialog {
+dialog#info-dialog[open] {
   width: min(920px, 94vw);
   height: min(760px, 88vh);
   padding: 0;
