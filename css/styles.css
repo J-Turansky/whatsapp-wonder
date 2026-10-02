@@ -357,6 +357,20 @@ dialog#info-dialog::backdrop {
   border: 0;
 }
 
+.file-picker-label {
+  display: inline-block;
+  margin: 0.25rem 0 0.65rem;
+  color: var(--accent-dark);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.visually-hidden:focus-visible + .file-picker-label {
+  outline: 3px solid var(--accent-dark);
+  outline-offset: 3px;
+}
+
 .drop-zone {
   display: flex;
   flex-direction: column;
@@ -364,7 +378,7 @@ dialog#info-dialog::backdrop {
   justify-content: center;
   gap: 0.4rem;
   width: 100%;
-  min-height: 8rem;
+  min-height: 10rem;
   padding: 1rem;
   border: 2px dashed var(--accent);
   border-radius: 0.65rem;
@@ -390,7 +404,7 @@ dialog#info-dialog::backdrop {
   font-size: 0.9rem;
 }
 
-.import-card label {
+.import-card label:not(.file-picker-label) {
   display: block;
   margin-bottom: 0.4rem;
   font-weight: 600;
@@ -446,6 +460,12 @@ dialog#info-dialog::backdrop {
   background: #eaf4f2;
 }
 
+.import-tip {
+  margin: 1rem 0 0;
+  color: #4d5a57;
+  line-height: 1.5;
+}
+
 .import-error {
   min-height: 1.5em;
   margin: 0.75rem 0 0;
@@ -480,8 +500,10 @@ dialog#info-dialog::backdrop {
   font-weight: 650;
 }
 
-.chat-summary .participant-row {
-  grid-column: 1 / -1;
+.participant-names {
+  margin: 0.45rem 0 0;
+  font-weight: 400;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 480px) {
@@ -503,10 +525,6 @@ dialog#info-dialog::backdrop {
   }
 
   .chat-summary {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .chat-summary .participant-row {
-    grid-column: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

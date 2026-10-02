@@ -33,7 +33,7 @@ function makeDate(parts, monthFirst) {
 }
 
 export function parseChat(text) {
-  const source = String(text ?? '').replace(/^\uFEFF/, '');
+  const source = String(text ?? '').replace(/^\uFEFF/, '').replace(/[\u200e\u200f]/g, '').replace(/[\u202f\u00a0]/g, ' ');
   const lines = source.split(/\r?\n/);
   const parsed = [];
   let firstAboveTwelve = false;
@@ -72,7 +72,7 @@ export function parseChat(text) {
     }
   }
 
-  const monthFirst = secondAboveTwelve;
+  const monthFirst = !firstAboveTwelve && secondAboveTwelve;
   const messages = [];
   let systemCount = 0;
   for (const item of parsed) {

@@ -14,7 +14,7 @@ const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
 const panels = Array.from(document.querySelectorAll('[role="tabpanel"]'));
 const panelWrapper = document.querySelector(".tabpanel-wrapper");
 const appMain = document.getElementById("app-main");
-const NO_MESSAGES = "We couldn't find any WhatsApp messages in that text. Make sure it's an exported chat (.txt).";
+const NO_MESSAGES = "We couldn't find any WhatsApp messages in that. Make sure it's the _chat.txt from 'Export chat'.";
 
 function formatChangelogDate(isoDate) {
   const parts = isoDate.split("-");
@@ -59,7 +59,7 @@ function renderImportPanel(message = "", pastedText = "") {
   section.appendChild(heading);
   const privacy = document.createElement("p");
   privacy.className = "privacy-note";
-  privacy.textContent = "Your chat never leaves your device.";
+  privacy.textContent = "Your chat never leaves this device.";
   section.appendChild(privacy);
 
   const picker = document.createElement("input");
@@ -67,18 +67,23 @@ function renderImportPanel(message = "", pastedText = "") {
   picker.id = "chat-file";
   picker.type = "file";
   picker.accept = ".txt,text/plain";
-  picker.setAttribute("aria-label", "Choose a WhatsApp chat text file");
   picker.addEventListener("change", () => {
     const file = picker.files?.[0];
+    picker.value = "";
     if (file) readFile(file);
   });
   section.appendChild(picker);
+  const pickerLabel = document.createElement("label");
+  pickerLabel.className = "file-picker-label";
+  pickerLabel.htmlFor = "chat-file";
+  pickerLabel.textContent = "Choose a .txt chat export";
+  section.appendChild(pickerLabel);
 
   const drop = document.createElement("button");
   drop.className = "drop-zone";
   drop.type = "button";
   drop.setAttribute("aria-describedby", "drop-help import-error");
-  drop.innerHTML = "<span class=\"drop-title\">Choose your _chat.txt file</span><span id=\"drop-help\">or drop it here</span>";
+  drop.innerHTML = "<span class=\"drop-title\">Or drop your _chat.txt file here</span><span id=\"drop-help\">You can also click to choose a file</span>";
   drop.addEventListener("click", () => picker.click());
   drop.addEventListener("dragover", (event) => {
     event.preventDefault();
@@ -97,11 +102,11 @@ function renderImportPanel(message = "", pastedText = "") {
 
   const divider = document.createElement("p");
   divider.className = "import-divider";
-  divider.textContent = "Or paste the exported text";
+  divider.textContent = "Or paste your chat text below";
   section.appendChild(divider);
   const label = document.createElement("label");
   label.htmlFor = "chat-paste";
-  label.textContent = "Paste chat text";
+  label.textContent = "Or paste your chat text";
   section.appendChild(label);
   const textarea = document.createElement("textarea");
   textarea.id = "chat-paste";
@@ -113,44 +118,53 @@ function renderImportPanel(message = "", pastedText = "") {
 
   const actions = document.createElement("div");
   actions.className = "import-actions";
-  const analyse = document.createElement("button");
-  analyse.type = "button";
-  analyse.className = "primary-button";
-  analyse.textContent = "Analyse pasted text";
-  analyse.addEventListener("click", () => analyseText(textarea.value));
+  const readButton = document.createElement("button");
+  readButton.type = "button";
+  readButton.className = "primary-button";
+  readButton.textContent = "Read pasted chat";
+  readButton.addEventListener("click", () => analyseText(textarea.value));
   const sample = document.createElement("button");
   sample.type = "button";
   sample.className = "secondary-button";
   sample.textContent = "Try a sample chat";
   sample.addEventListener("click", () => analyseText(SAMPLE_CHAT));
-  actions.append(analyse, sample);
+  actions.append(readButton, sample);
   section.appendChild(actions);
+
+  const tip = document.createElement("p");
+  tip.className = "import-tip";
+  tip.textContent = "In WhatsApp: open the chat → ⋮ / contact name → Export chat → Without media. If you get a .zip, unzip it and pick _chat.txt.";
+  section.appendChild(tip);
 
   const error = document.createElement("p");
   error.id = "import-error";
   error.className = "import-error";
-  error.setAttribute("aria-live", "polite");
-  error.setAttribute("role", "status");
+  error.setAttribute("role", "alert");
   error.textContent = message;
   section.appendChild(error);
   appMain.appendChild(section);
 }
 
+function showImportError(message) {
+  const error = document.getElementById("import-error");
+  if (error) error.textContent = message;
+}
+
 function readFile(file) {
-  if (/\.zip$/i.test(file.name)) {
-    renderImportPanel("Please unzip the export first and choose the _chat.txt file inside.");
+  if (!/\.txt$/i.test(file.name)) {
+    showImportError(NO_MESSAGES);
     return;
   }
   file.text().then(analyseText).catch((error) => {
     console.error("Could not read the selected chat file.", error);
-    renderImportPanel("We couldn't read that file. Please choose a readable .txt export or paste its text.");
+    showImportError("We couldn't read that file. Please choose a readable .txt export or paste its text.");
   });
 }
 
 function analyseText(text) {
   const result = parseChat(text);
   if (!result.messages.some((message) => !message.isSystem)) {
-    renderImportPanel(NO_MESSAGES, text);
+    showImportError(NO_MESSAGES);
     return;
   }
   setChat(result);
@@ -170,14 +184,22 @@ function renderConfirmation(chat) {
   card.setAttribute("aria-labelledby", "confirmation-title");
   const title = document.createElement("h2");
   title.id = "confirmation-title";
-  title.textContent = "Your chat is ready";
+  title.tabIndex = -1;
+  title.textContent = "Chat loaded";
   card.appendChild(title);
+  const formatLabel = document.createElement("p");
+  formatLabel.textContent = chat.format === "iOS" ? "iPhone (iOS) export" : (chat.format || "Unknown") + " export";
+  card.appendChild(formatLabel);
+
   const summary = document.createElement("dl");
   summary.className = "chat-summary";
   const messageCount = chat.messages.filter((message) => !message.isSystem).length;
+  const mediaCount = chat.messages.filter((message) => message.isMedia).length;
   const fields = [
     ["Messages", messageCount.toLocaleString("en-US")],
-    ["Participants", String(chat.participants.length)]
+    ["Participants", String(chat.participants.length)],
+    ["Date range", formatDate(chat.startDate) + " – " + formatDate(chat.endDate)],
+    ["Media", String(mediaCount)]
   ];
   for (const [term, value] of fields) {
     const wrapper = document.createElement("div");
@@ -186,41 +208,23 @@ function renderConfirmation(chat) {
     const dd = document.createElement("dd");
     dd.textContent = value;
     wrapper.append(dt, dd);
+    if (term === "Participants" && chat.participants.length) {
+      const names = document.createElement("p");
+      names.className = "participant-names";
+      names.textContent = chat.participants.join(", ");
+      wrapper.appendChild(names);
+    }
     summary.appendChild(wrapper);
   }
-  const participants = document.createElement("div");
-  participants.className = "participant-row";
-  const participantTerm = document.createElement("dt");
-  participantTerm.textContent = "In this chat";
-  const participantValue = document.createElement("dd");
-  const names = chat.participants.slice(0, 10);
-  participantValue.textContent = names.join(", ");
-  if (chat.participants.length > 10) participantValue.append(` +${chat.participants.length - 10} more`);
-  participants.append(participantTerm, participantValue);
-  summary.appendChild(participants);
-
-  const range = document.createElement("div");
-  const rangeTerm = document.createElement("dt");
-  rangeTerm.textContent = "Date range";
-  const rangeValue = document.createElement("dd");
-  rangeValue.textContent = `${formatDate(chat.startDate)} – ${formatDate(chat.endDate)}`;
-  range.append(rangeTerm, rangeValue);
-  summary.appendChild(range);
-  const format = document.createElement("div");
-  const formatTerm = document.createElement("dt");
-  formatTerm.textContent = "Format";
-  const formatValue = document.createElement("dd");
-  formatValue.textContent = chat.format || "Unknown";
-  format.append(formatTerm, formatValue);
-  summary.appendChild(format);
   card.appendChild(summary);
   const reset = document.createElement("button");
   reset.type = "button";
   reset.className = "primary-button";
-  reset.textContent = "Import a different chat";
+  reset.textContent = "Load a different chat";
   reset.addEventListener("click", clearChat);
   card.appendChild(reset);
   appMain.appendChild(card);
+  title.focus();
 }
 
 function selectTab(tab) {
