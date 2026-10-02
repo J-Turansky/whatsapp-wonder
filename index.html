@@ -19,7 +19,7 @@
 
   <main id="app-main"></main>
 
-  <div class="version-badge" id="version-badge">v1.1.0</div>
+  <div class="version-badge" id="version-badge">v1.4.0</div>
 
   <dialog id="info-dialog" aria-labelledby="info-dialog-title">
     <div class="dialog-header">
@@ -43,7 +43,7 @@
         <ol>
           <li>In WhatsApp, open the chat, then choose <strong>⋮ / contact name → More → Export chat → Without media</strong>.</li>
           <li>Unzip the export if needed, then choose the <code>_chat.txt</code> file here or paste its text.</li>
-          <li>Check the message count, participants and date range before exploring your chat.</li>
+          <li>Check the import confirmation, then explore Stats, Awards and Story. All analysis stays in this browser session.</li>
         </ol>
       </div>
 
@@ -62,14 +62,15 @@
               <div class="flow-arrow" aria-hidden="true">&rarr;</div>
               <div class="flow-box">parser.js</div>
               <div class="flow-arrow" aria-hidden="true">&rarr;</div>
-              <div class="flow-box">state.js</div>
+              <div class="flow-box">state.js + analysis.js</div>
             </div>
           </div>
         </div>
         <ul class="tech-notes">
           <li>Plain HTML, CSS and JavaScript using ES modules &mdash; no frameworks.</li>
           <li>No libraries or CDNs; every file is served from this site.</li>
-          <li>Parser, shared state and built-in sample data live in <code>js/parser.js</code>, <code>js/state.js</code> and <code>js/sample-chat.js</code>.</li>
+          <li><code>js/analysis.js</code> shares pure local date, word, emoji, award and story calculations across the three views; <code>js/state.js</code> holds only the current chat in memory.</li>
+          <li>Stats include participant and activity counts; Awards are factual templates; Story summarizes dates, sessions and a complete monthly timeline.</li>
           <li>No network calls are made with your chat data.</li>
           <li>Hosted as a static site on GitHub Pages.</li>
         </ul>
