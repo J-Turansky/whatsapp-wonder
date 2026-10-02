@@ -1,9 +1,9 @@
-import { VERSION, CHANGELOG } from "./version.js";
-import { parseChat } from "./parser.js";
-import { extractWhatsAppText } from "./zip.js";
-import { SAMPLE_CHAT } from "./sample-chat.js";
-import { getChat, setChat } from "./state.js";
-import { analyzeChat } from "./analysis.js";
+import { VERSION, CHANGELOG } from "./version.js?v=1.4.0";
+import { parseChat } from "./parser.js?v=1.4.0";
+import { extractWhatsAppText } from "./zip.js?v=1.4.0";
+import { SAMPLE_CHAT } from "./sample-chat.js?v=1.4.0";
+import { getChat, setChat } from "./state.js?v=1.4.0";
+import { analyzeChat } from "./analysis.js?v=1.4.0";
 
 const badge = document.getElementById("version-badge");
 if (badge) badge.textContent = `v${VERSION}`;
