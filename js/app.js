@@ -425,7 +425,7 @@ function renderAwards(awards) {
     card.append(copy, feedback);
     if (award.supportMessageIds?.length) {
       const evidence = element("button", "secondary-button evidence-button", "See messages"); evidence.type = "button"; evidence.id = `award-evidence-${index}`; evidence.setAttribute("aria-label", `See messages for ${award.title} award`);
-      evidence.addEventListener("click", () => openEvidence(`${award.title} award`, award.supportMessageIds, award.supportPairs, "awards", evidence.id));
+      evidence.addEventListener("click", () => openEvidence(`${award.title} award`, award.supportMessageIds, award.supportPairs, "awards", evidence.id, award.title === "The Novelist"));
       card.appendChild(evidence);
     }
     grid.appendChild(card);
