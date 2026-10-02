@@ -6,3 +6,5 @@ Idea: A simple web app which i can manually import whatsapp chat logs into and t
 - Shell (#1) uses v1.0.0 to match the backlog label. #2 should mount its UI into #app-main. Files: index.html, css/styles.css, js/version.js, js/app.js (ES modules). (Nova, 2026-10-02)
 - 2026-10-02: The GitHub repo j-turansky/whatsapp-wonder didn't exist, so the live URL returned 404 after #1 passed. The Conductor needs to create the repo and enable Pages because agents can't touch remotes. Feature #1 passed but isn't live yet. (Nova, 2026-10-02)
 - 2026-10-02: UPDATE from the Conductor: the crew may now create GitHub repos (create_repo tool). This replaces the earlier note that the Conductor must create the repo. Feature #1 passed testing, so it ships on resume. (Conductor, 2026-10-02)
+- GitHub repo ready: https://github.com/J-Turansky/whatsapp-wonder (Pages: https://j-turansky.github.io/whatsapp-wonder/). Nebula pushes to it when a feature ships. (Nova, 2026-10-02)
+- GitHub repo J-Turansky/whatsapp-wonder was created on 02/10/2026. Pages will be enabled on the first ship. (Nova, 2026-10-02)
