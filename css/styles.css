@@ -731,7 +731,8 @@ dialog#info-dialog::backdrop {
   body.report-open #report-preview { display: block !important; width: auto; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; color: #000; background: #fff; }
   body.report-open #report-preview .report-actions { display: none !important; }
   body.report-open #report-preview h1, body.report-open #report-preview h2 { color: #000; }
-  body.report-open #report-preview .report-section { break-inside: avoid; }
+  body.report-open #report-preview .report-section { break-inside: auto; }
+  body.report-open #report-preview .report-section h2, body.report-open #report-preview .report-section h3 { break-after: avoid; }
   body.report-open #report-preview .report-table { font-size: 9pt; }
   body.report-open #report-preview .report-table th { background: #fff; }
   body.report-open #report-preview .report-table tr { break-inside: avoid; }

@@ -278,33 +278,7 @@ function renderStats(data, activity, patterns) {
     makeMetricCard("Media", data.totalMedia), makeMetricCard("Active days", data.activeDays));
   section.appendChild(metrics);
 
-  const peopleSection = element("section", "chart-section");
-  peopleSection.appendChild(element("h3", "", "By participant"));
-  const tableWrap = element("div", "table-scroll");
-  const table = document.createElement("table");
-  table.className = "participant-table";
-  const head = document.createElement("thead");
-  const headRow = document.createElement("tr");
-  ["Participant", "Messages", "Words", "Media", "Share of chat", "Handoffs as later author", "Median observed gap"].forEach((text) => headRow.appendChild(element("th", "", text)));
-  head.appendChild(headRow);
-  table.appendChild(head);
-  const body = document.createElement("tbody");
-  data.people.forEach((person) => {
-    const row = document.createElement("tr");
-    row.appendChild(element("th", "", person.name));
-    const pattern = patterns.participants.find((item) => item.name === person.name);
-    const median = data.people.length === 1 ? "No cross-participant handoffs in this scope"
-      : pattern.medianGapSeconds === null ? "Insufficient data"
-        : `${formatDuration(pattern.medianGapSeconds)} (${pattern.handoffCount} samples)`;
-    [person.messages, person.words, person.media, `${person.messages.toLocaleString("en-US")} (${(person.messages / data.totalMessages * 100).toFixed(1)}%)`, pattern.handoffCount, median]
-      .forEach((value) => row.appendChild(element("td", "", String(value))));
-    body.appendChild(row);
-  });
-  table.appendChild(body);
-  tableWrap.appendChild(table);
-  peopleSection.appendChild(tableWrap);
-  section.appendChild(peopleSection);
-  renderConversationPatterns(section, patterns);
+  renderConversationPatterns(section, data, patterns);
   appendBarChart(section, "Messages by hour", "Local hour of each authored message; each bar is relative to the busiest hour.", data.hourly);
   appendBarChart(section, "Messages by weekday", "Local weekday of each authored message; each bar is relative to the busiest weekday.", data.weekdays);
 
@@ -337,11 +311,36 @@ function formatDuration(seconds) {
   const remaining = seconds - hours * 3600 - minutes * 60;
   return [hours ? `${hours} ${hours === 1 ? "hour" : "hours"}` : "", minutes ? `${minutes} ${minutes === 1 ? "minute" : "minutes"}` : "", remaining || (!hours && !minutes) ? `${Number(remaining.toFixed(1))} ${remaining === 1 ? "second" : "seconds"}` : ""].filter(Boolean).join(" ");
 }
-function renderConversationPatterns(parent, patterns) {
+function renderConversationPatterns(parent, data, patterns) {
   const section = element("section", "chart-section conversation-patterns");
   section.appendChild(element("h3", "", "Conversation patterns"));
   section.appendChild(element("p", "chart-description", "These are gaps between adjacent matching messages in this scope, attributed to the later author; they are not verified replies and do not describe intent or sentiment."));
   if (patterns.participants.length === 1) section.appendChild(element("p", "", "No cross-participant handoffs in this scope."));
+  section.appendChild(element("h4", "", "By participant"));
+  const tableWrap = element("div", "table-scroll");
+  const table = document.createElement("table");
+  table.className = "participant-table";
+  const head = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  ["Participant", "Messages", "Words", "Media", "Share of chat", "Handoffs as later author", "Median observed gap"].forEach((text) => headRow.appendChild(element("th", "", text)));
+  head.appendChild(headRow);
+  table.appendChild(head);
+  const body = document.createElement("tbody");
+  data.people.forEach((person) => {
+    const row = document.createElement("tr");
+    row.appendChild(element("th", "", person.name));
+    const pattern = patterns.participants.find((item) => item.name === person.name);
+    const median = patterns.participants.length === 1 ? "No cross-participant handoffs in this scope"
+      : pattern.medianGapSeconds === null ? `Insufficient data (${pattern.handoffCount} samples; 2 required)`
+        : `${formatDuration(pattern.medianGapSeconds)} (${pattern.handoffCount} samples)`;
+    [person.messages, person.words, person.media, `${person.messages.toLocaleString("en-US")} (${(person.messages / data.totalMessages * 100).toFixed(1)}%)`, pattern.handoffCount, median]
+      .forEach((value) => row.appendChild(element("td", "", String(value))));
+    body.appendChild(row);
+  });
+  table.appendChild(body);
+  tableWrap.appendChild(table);
+  section.appendChild(tableWrap);
+  section.appendChild(element("h4", "", "Message share"));
   const bars = element("div", "share-bars");
   patterns.participants.forEach((person) => {
     const row = element("div", "share-bar-row");
@@ -356,13 +355,13 @@ function renderConversationPatterns(parent, patterns) {
 function renderActivityHeatmap(parent, activity) {
   const section = element("section", "chart-section activity-heatmap");
   section.appendChild(element("h3", "", "Weekly activity heatmap"));
-  section.appendChild(element("p", "chart-description", "Counts use each message’s local weekday and hour, including media. Brighter cells mean more messages; the count is always shown."));
+  section.appendChild(element("p", "chart-description", "Hours use your device’s local time and weekday; media messages count once. Brighter cells mean more messages, with the numeric count always shown."));
   const peak = activity.busiest;
   section.appendChild(element("p", "busiest-hour", `Busiest weekday-hour: ${peak.day} at ${String(peak.hour).padStart(2, "0")}:00 (${peak.count} ${peak.count === 1 ? "message" : "messages"}).`));
   const scroller = element("div", "heatmap-scroll"); scroller.tabIndex = 0; scroller.setAttribute("role", "region"); scroller.setAttribute("aria-label", "Scrollable weekday by local-hour activity table");
   const table = document.createElement("table"); table.className = "heatmap-table";
   const caption = element("caption", "", "Authored message counts by local weekday and hour"); table.appendChild(caption);
-  const thead = document.createElement("thead"); const headerRow = document.createElement("tr"); headerRow.appendChild(element("th", "", "Weekday / hour"));
+  const thead = document.createElement("thead"); const headerRow = document.createElement("tr"); const corner = element("th", "", "Weekday / hour"); corner.scope = "col"; headerRow.appendChild(corner);
   for (let hour = 0; hour < 24; hour += 1) { const th = element("th", "", `${String(hour).padStart(2, "0")}:00`); th.scope = "col"; headerRow.appendChild(th); }
   thead.appendChild(headerRow); table.appendChild(thead);
   const max = Math.max(1, ...activity.cells.flatMap((row) => row.hours.map((cell) => cell.count)));
@@ -377,7 +376,7 @@ function renderActivityHeatmap(parent, activity) {
 function renderWeeklyTrend(parent, activity) {
   const section = element("section", "chart-section weekly-trend");
   section.appendChild(element("h3", "", activity.limited ? "Last 12 weeks of matching messages" : "Weekly activity trend"));
-  section.appendChild(element("p", "chart-description", "Each row covers Monday through Sunday in local calendar dates; quiet weeks between the first and last match are included."));
+  section.appendChild(element("p", "chart-description", "Each inclusive date range runs Monday through Sunday in local calendar dates; quiet weeks between matching weeks are included."));
   const list = element("ol", "weekly-trend-list");
   activity.weeks.forEach((week) => {
     const item = document.createElement("li");
@@ -639,7 +638,7 @@ function openReportPreview(chat, messages, analysis) {
   const report = element("article", "card report-preview"); report.id = "report-preview"; report.setAttribute("aria-labelledby", "report-title");
   const heading = element("h1", "", "WhatsApp Wonder insights report"); heading.id = "report-title"; heading.tabIndex = -1; report.appendChild(heading);
   report.appendChild(element("p", "report-privacy-note", "Includes participant names and chat-derived metrics. No raw messages. Once saved/shared, your file is your responsibility."));
-  report.appendChild(element("p", "", `Scope: ${reportScopeText(appliedFilter)} · ${messages.length.toLocaleString("en-US")} ${messages.length === 1 ? "matching authored message" : "matching authored messages"}.`));
+  report.appendChild(element("p", "", `Scope: ${reportScopeText(appliedFilter)}${appliedFilter.from || appliedFilter.to ? " (inclusive local dates)" : ""} · ${messages.length.toLocaleString("en-US")} ${messages.length === 1 ? "matching authored message" : "matching authored messages"}.`));
   report.appendChild(element("p", "", `Confirmed date interpretation: ${chat.dateOrder === "month-first" ? "Month/day/year" : "Day/month/year"}.`));
   report.appendChild(element("p", "", `Whole-import quality (not scope counts): ${chat.systemCount} system entries; ${chat.skippedLines} skipped nonempty lines.`));
   report.appendChild(element("p", "report-omissions", "Top-word and emoji rankings are omitted from this report by default. Search terms and raw message text are never included."));
@@ -655,13 +654,14 @@ function openReportPreview(chat, messages, analysis) {
     story.appendChild(element("p", "", `The first matching message was on ${formatDate(analysis.story.first.date)}${analysis.story.first.author ? ` with ${analysis.story.first.author}` : ""}.`));
     story.appendChild(element("p", "", `Busiest day: ${formatDate(analysis.story.busiestDay.date)} (${analysis.story.busiestDay.count} messages); busiest month: ${formatMonth(analysis.story.busiestMonth.date)} (${analysis.story.busiestMonth.count} messages).`));
     story.appendChild(element("p", "", !analysis.story.quietest || analysis.story.quietest.silentDays === 0 ? "No full silent days between active dates." : `Quietest gap: ${analysis.story.quietest.silentDays} full days between ${formatDate(analysis.story.quietest.start)} and ${formatDate(analysis.story.quietest.end)}.`));
+    story.appendChild(element("p", "", `Longest active streak: ${analysis.story.streak.length} ${analysis.story.streak.length === 1 ? "day" : "days"}, from ${formatDate(analysis.story.streak.start)} to ${formatDate(analysis.story.streak.end)}. ${analysis.story.starter.name} began the most conversations, with ${analysis.story.starter.count} ${analysis.story.starter.count === 1 ? "session" : "sessions"} started.`));
     addReportTable(story, ["Month", "Matching authored messages"], analysis.story.timeline.map((month) => [formatMonth(month.date), month.count]));
     const activity = reportSection(report, "Weekly activity highlights");
     const peak = analysis.activity.busiest;
     activity.appendChild(element("p", "", `Busiest weekday-hour: ${peak.day} at ${String(peak.hour).padStart(2, "0")}:00 (${peak.count} messages).`));
     const nonzero = analysis.activity.cells.flatMap((row) => row.hours.filter((cell) => cell.count).map((cell) => [`${row.day} ${String(cell.hour).padStart(2, "0")}:00`, cell.count]));
     if (nonzero.length) addReportTable(activity, ["Local weekday and hour", "Messages"], nonzero);
-    activity.appendChild(element("h3", "", "Weekly trend (Monday–Sunday local dates)"));
+    activity.appendChild(element("h3", "", analysis.activity.limited ? "Last 12 weeks of matching messages" : "Weekly activity trend (Monday–Sunday local dates)"));
     addReportTable(activity, ["Inclusive week", "Matching messages"], analysis.activity.weeks.map((week) => [`${formatDate(week.start)} – ${formatDate(week.end)}`, week.count]));
     const patterns = reportSection(report, "Conversation patterns");
     patterns.appendChild(element("p", "", "Observed gaps between adjacent matching messages, attributed to the later author; these are not verified replies."));
