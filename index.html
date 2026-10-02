@@ -10,7 +10,7 @@
   <header class="app-header">
     <div class="app-header-text">
       <h1>WhatsApp Wonder</h1>
-      <p class="tagline">Turn your WhatsApp chat export into stats, fun facts and a story, all inside your browser.</p>
+      <p class="tagline">Turn your WhatsApp chat export into stats, fun facts, a story and searchable messages, all inside your browser.</p>
     </div>
     <button id="info-btn" class="info-btn" type="button" aria-label="About and help">
       <span aria-hidden="true">i</span>
@@ -19,7 +19,7 @@
 
   <main id="app-main"></main>
 
-  <div class="version-badge" id="version-badge">v1.2.0</div>
+  <div class="version-badge" id="version-badge">v1.3.0</div>
 
   <dialog id="info-dialog" aria-labelledby="info-dialog-title">
     <div class="dialog-header">
@@ -42,8 +42,8 @@
         </p>
         <ol>
           <li>In WhatsApp, open the chat, then choose <strong>⋮ / contact name → More → Export chat → Without media</strong>.</li>
-          <li>Unzip the export if needed, then choose the <code>_chat.txt</code> file here or paste its text.</li>
-          <li>Check the import confirmation, then explore Stats, Awards and Story. All analysis stays in this browser session.</li>
+          <li>Choose the exported <code>.txt</code> or <code>.zip</code> here, or paste chat text. ZIPs are read locally.</li>
+          <li>Review the date interpretation and import quality, then explore Stats, Awards, Story and searchable Messages. Filters apply across every view; message searches are local and private, and nothing is saved.</li>
         </ol>
       </div>
 
@@ -69,9 +69,9 @@
         <ul class="tech-notes">
           <li>Plain HTML, CSS and JavaScript using ES modules &mdash; no frameworks.</li>
           <li>No libraries or CDNs; every file is served from this site.</li>
-          <li><code>js/analysis.js</code> shares pure local date, word, emoji, award and story calculations across the three views; <code>js/state.js</code> holds only the current chat in memory.</li>
-          <li>Stats include participant and activity counts; Awards are factual templates; Story summarizes dates, sessions and a complete monthly timeline.</li>
-          <li>No network calls are made with your chat data.</li>
+          <li><code>js/analysis.js</code> shares calculations across Stats, Awards and Story using the same filtered authored messages supplied to Messages; ZIP extraction uses browser-native APIs. <code>js/state.js</code> holds only the confirmed chat in memory.</li>
+          <li>Stats include participant and activity counts; Awards are factual templates; Story summarizes dates, sessions and a complete monthly timeline; Messages searches the same scoped authored conversation.</li>
+          <li>Chat text, ZIP members, filters and searches remain in memory; no network calls or persistence use chat data.</li>
           <li>Hosted as a static site on GitHub Pages.</li>
         </ul>
       </div>
