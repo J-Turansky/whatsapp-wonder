@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 .nebula/run/
 test-results/
+!test-results/
+test-results/*
+!test-results/test_release_v120_round1.py
