@@ -2,7 +2,7 @@
 const STOPWORDS = new Set("a an and are as at be but by can do for from had has have he her i in is it me my no not of on or she so that the their them they this to was we were with you your".split(" "));
 const SESSION_GAP_MS = 6 * 60 * 60 * 1000;
 const WORD_PATTERN = /[\p{L}]+(?:['’][\p{L}]+)*/gu;
-const URL_PATTERN = /(?:https?:\/\/|www\.)[^\s]+/giu;
+const URL_PATTERN = /\b(?:[a-z][a-z\d+.-]*:\/\/|www\.)[^\s]+|\b(?:[\p{L}\p{N}-]+\.)+[\p{L}]{2,}(?:\/[^\s]*)?/giu;
 const EMOJI_PATTERN = /\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Regional_Indicator}|\u20e3/u;
 const GRAPHEME_SEGMENTER = typeof Intl.Segmenter === "function"
   ? new Intl.Segmenter("en", { granularity: "grapheme" })
@@ -34,7 +34,7 @@ function authoredMessages(chat) {
     .sort((a, b) => a.date.getTime() - b.date.getTime() || a.exportOrder - b.exportOrder);
 }
 function wordsIn(text) {
-  return (text.match(WORD_PATTERN) || []).map((word) => word.toLowerCase());
+  return (text.match(WORD_PATTERN) || []).map((word) => word.toLowerCase().normalize("NFC"));
 }
 function emojiIn(text) {
   if (!GRAPHEME_SEGMENTER) return null;
