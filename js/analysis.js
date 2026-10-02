@@ -1,7 +1,7 @@
 // Fixed English stopword list used only for the top-word ranking.
 const STOPWORDS = new Set("a an and are as at be but by can do for from had has have he her i in is it me my no not of on or she so that the their them they this to was we were with you your".split(" "));
 const SESSION_GAP_MS = 6 * 60 * 60 * 1000;
-const WORD_PATTERN = /[\p{L}]+(?:['’][\p{L}]+)*/gu;
+const WORD_PATTERN = /[\p{L}](?:[\p{L}\p{M}])*(?:['’][\p{L}](?:[\p{L}\p{M}])*)*/gu;
 const URL_PATTERN = /\b(?:[a-z][a-z\d+.-]*:\/\/|www\.)[^\s]+|\b(?:[\p{L}\p{N}-]+\.)+[\p{L}]{2,}(?:\/[^\s]*)?/giu;
 const EMOJI_PATTERN = /\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Regional_Indicator}|\u20e3/u;
 const GRAPHEME_SEGMENTER = typeof Intl.Segmenter === "function"
@@ -74,7 +74,7 @@ function calculateStats(messages) {
     person.words += tokens.length;
     totalWords += tokens.length;
     const rankedText = message.text.replace(URL_PATTERN, " ");
-    (rankedText.match(WORD_PATTERN) || []).map((word) => word.toLowerCase()).forEach((word) => words.set(word, (words.get(word) || 0) + 1));
+    (rankedText.match(WORD_PATTERN) || []).map((word) => word.toLowerCase().normalize("NFC")).forEach((word) => words.set(word, (words.get(word) || 0) + 1));
     const segments = emojiIn(message.text);
     if (segments) segments.forEach((emoji) => emojis.set(emoji, (emojis.get(emoji) || 0) + 1));
   });
