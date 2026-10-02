@@ -327,3 +327,186 @@ dialog#info-dialog::backdrop {
     align-self: center;
   }
 }
+
+
+/* Chat import and confirmation */
+.import-card,
+.confirmation-card {
+  max-width: 44rem;
+}
+
+.import-card h2,
+.confirmation-card h2 {
+  margin-top: 0;
+  color: var(--accent-dark);
+}
+
+.import-card .privacy-note {
+  margin-top: -0.25rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-height: 8rem;
+  padding: 1rem;
+  border: 2px dashed var(--accent);
+  border-radius: 0.65rem;
+  background: #f8fcfb;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.drop-zone:hover,
+.drop-zone.is-dragging {
+  background: #e6f3f0;
+  border-color: var(--accent-dark);
+}
+
+.drop-title {
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
+.import-divider {
+  margin: 1.25rem 0 0.75rem;
+  color: #4d5a57;
+  font-size: 0.9rem;
+}
+
+.import-card label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+}
+
+.import-card textarea {
+  display: block;
+  width: 100%;
+  min-height: 10rem;
+  resize: vertical;
+  padding: 0.75rem;
+  border: 1px solid #879994;
+  border-radius: 0.45rem;
+  color: var(--text);
+  background: #fff;
+  font: inherit;
+  line-height: 1.45;
+}
+
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.primary-button,
+.secondary-button {
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--accent-dark);
+  border-radius: 0.45rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary-button {
+  background: var(--accent-dark);
+  color: #fff;
+}
+
+.secondary-button {
+  background: #fff;
+  color: var(--accent-dark);
+}
+
+.primary-button:hover {
+  background: #084b44;
+}
+
+.secondary-button:hover {
+  background: #eaf4f2;
+}
+
+.import-error {
+  min-height: 1.5em;
+  margin: 0.75rem 0 0;
+  color: #8a241d;
+  font-weight: 600;
+}
+
+.chat-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin: 1.25rem 0;
+}
+
+.chat-summary > div {
+  min-width: 0;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.chat-summary dt {
+  margin-bottom: 0.3rem;
+  color: #4d5a57;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.chat-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 650;
+}
+
+.chat-summary .participant-row {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 480px) {
+  main {
+    padding: 1rem;
+  }
+
+  .import-card,
+  .confirmation-card {
+    padding: 1rem;
+  }
+
+  .import-actions {
+    flex-direction: column;
+  }
+
+  .import-actions button {
+    width: 100%;
+  }
+
+  .chat-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chat-summary .participant-row {
+    grid-column: auto;
+  }
+}
