@@ -29,7 +29,7 @@ function formatDate(date) {
 }
 function formatMonth(date) { return date.toLocaleDateString("en-GB", { month: "long", year: "numeric" }); }
 function authoredMessages(chat) {
-  return chat.messages.map((message, exportOrder) => ({ ...message, exportOrder }))
+  return chat.messages.map((message, exportOrder) => ({ ...message, exportOrder: message.exportOrder ?? exportOrder }))
     .filter((message) => !message.isSystem && message.author)
     .sort((a, b) => a.date.getTime() - b.date.getTime() || a.exportOrder - b.exportOrder);
 }
@@ -90,11 +90,12 @@ function calculateStats(messages) {
   };
 }
 
-function calculateAwards(messages) {
+function calculateAwards(messages, patterns) {
   const awards = [];
-  const add = (title, winner, metric, cheeky, measure) => {
-    if (winner) awards.push({ title, name: winner.name, metric: String(metric), cheeky, measure });
+  const add = (title, winner, metric, cheeky, measure, supportMessageIds = [], supportPairs = 0) => {
+    if (winner) awards.push({ title, name: winner.name, metric: String(metric), cheeky, measure, supportMessageIds, supportPairs });
   };
+  const messagesFor = (predicate) => messages.filter(predicate).map((message) => message.exportOrder);
   const hours = (start, end) => {
     const counts = new Map();
     messages.forEach((message) => {
@@ -104,82 +105,143 @@ function calculateAwards(messages) {
     return counts;
   };
   const night = chooseWinner(hours(0, 5));
-  add("Night Owl", night, night ? `${night.metric} ${night.metric === 1 ? "message" : "messages"}` : null, "The clock was optional, apparently.", "sent from 00:00 to 04:59");
+  add("Night Owl", night, night ? `${night.metric} ${night.metric === 1 ? "message" : "messages"}` : null, "The clock was optional, apparently.", "sent from 00:00 to 04:59",
+    night ? messagesFor((message) => message.author === night.name && message.date.getHours() < 5) : []);
   const early = chooseWinner(hours(5, 9));
-  add("Early Bird", early, early ? `${early.metric} ${early.metric === 1 ? "message" : "messages"}` : null, "Already on the chat before the day got going.", "sent from 05:00 to 08:59");
+  add("Early Bird", early, early ? `${early.metric} ${early.metric === 1 ? "message" : "messages"}` : null, "Already on the chat before the day got going.", "sent from 05:00 to 08:59",
+    early ? messagesFor((message) => message.author === early.name && message.date.getHours() >= 5 && message.date.getHours() < 9) : []);
 
   let novelist = null;
   messages.forEach((message) => {
     if (message.isMedia) return;
     const count = wordsIn(message.text).length;
     if (!count) return;
-    const candidate = { name: message.author, count, date: message.date, order: message.exportOrder };
+    const candidate = { name: message.author, count, date: message.date, order: message.exportOrder, message };
     const earlier = novelist && (candidate.date < novelist.date ||
-      (candidate.date.getTime() === novelist.date.getTime() &&
-        (candidate.order < novelist.order || (candidate.order === novelist.order && compareNames(candidate.name, novelist.name) < 0))));
+      (candidate.date.getTime() === novelist.date.getTime() && candidate.order < novelist.order));
     if (!novelist || count > novelist.count || (count === novelist.count && earlier)) novelist = candidate;
   });
-  add("The Novelist", novelist, novelist ? `${novelist.count} words` : null, "A whole paragraph was just getting warmed up.", "words in their longest single non-media message");
+  add("The Novelist", novelist, novelist ? `${novelist.count} words` : null, "A whole paragraph was just getting warmed up.", "words in their longest single non-media message",
+    novelist ? [novelist.message.exportOrder] : []);
 
-  const pairs = new Map();
-  for (let i = 1; i < messages.length; i += 1) {
-    const previous = messages[i - 1];
-    const current = messages[i];
+  const pairsByAuthor = new Map();
+  for (let index = 1; index < messages.length; index += 1) {
+    const previous = messages[index - 1];
+    const current = messages[index];
     if (current.author === previous.author && current.date - previous.date <= 5 * 60 * 1000) {
-      pairs.set(current.author, (pairs.get(current.author) || 0) + 1);
+      if (!pairsByAuthor.has(current.author)) pairsByAuthor.set(current.author, []);
+      pairsByAuthor.get(current.author).push([previous, current]);
     }
   }
-  const doubleTexter = chooseWinner(pairs);
+  const doubleTexter = chooseWinner(new Map([...pairsByAuthor].map(([name, pairs]) => [name, pairs.length])));
+  const doublePairs = doubleTexter ? pairsByAuthor.get(doubleTexter.name) : [];
   add("Double-Texter", doubleTexter, doubleTexter ? `${doubleTexter.metric} ${doubleTexter.metric === 1 ? "pair" : "pairs"}` : null,
-    "One message was clearly not the whole thought.", "adjacent same-author messages no more than five minutes apart");
+    "One message was clearly not the whole thought.", "adjacent same-author messages no more than five minutes apart",
+    doublePairs.flatMap((pair) => pair.map((message) => message.exportOrder)), doublePairs.length);
 
-  const replies = new Map();
-  for (let i = 0; i < messages.length; i += 1) {
-    for (let j = i + 1; j < messages.length; j += 1) {
-      if (messages[j].date - messages[j - 1].date >= SESSION_GAP_MS) break;
-      if (messages[j].author !== messages[i].author) {
-        if (!replies.has(messages[j].author)) replies.set(messages[j].author, []);
-        replies.get(messages[j].author).push((messages[j].date - messages[i].date) / 1000);
-        break;
-      }
-    }
-  }
-  const eligible = [...replies].filter(([, times]) => times.length >= 2).map(([name, times]) => {
-    times.sort((a, b) => a - b);
-    const middle = Math.floor(times.length / 2);
-    return { name, times, median: times.length % 2 ? times[middle] : (times[middle - 1] + times[middle]) / 2 };
-  }).sort((a, b) => a.median - b.median || compareNames(a.name, b.name));
-  if (eligible.length) {
-    const winner = eligible[0];
-    const seconds = winner.median;
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-    const duration = [
-      hours ? `${hours} ${hours === 1 ? "hour" : "hours"}` : "",
-      minutes ? `${minutes} ${minutes === 1 ? "minute" : "minutes"}` : "",
-      remainingSeconds || (!hours && !minutes) ? `${remainingSeconds} ${remainingSeconds === 1 ? "second" : "seconds"}` : ""
-    ].filter(Boolean).join(" ");
-    awards.push({ title: "Fastest Replier", name: winner.name, metric: `median ${duration} (${winner.times.length} replies)`,
-      cheeky: "Replies arrived before the conversation could gather dust.", measure: "median elapsed time across qualifying direct replies" });
+  const handoff = patterns.winner;
+  if (handoff) {
+    awards.push({
+      title: "Shortest observed handoff", name: handoff.name,
+      metric: `median ${durationLabel(handoff.medianGapSeconds)} (${handoff.handoffCount} samples)`,
+      cheeky: "A measured gap between adjacent messages, not a verified reply.",
+      measure: "median gap after another author’s immediately preceding matching message, under six hours",
+      supportMessageIds: handoff.handoffs.flatMap((pair) => [pair.previous.exportOrder, pair.current.exportOrder]),
+      supportPairs: handoff.handoffCount
+    });
   }
 
   const emojiCounts = new Map();
+  const emojiSources = new Map();
   const laughCounts = new Map();
+  const laughSources = new Map();
   messages.forEach((message) => {
     if (message.isMedia) return;
     const segments = emojiIn(message.text);
-    if (segments?.length) emojiCounts.set(message.author, (emojiCounts.get(message.author) || 0) + segments.length);
+    if (segments?.length) {
+      emojiCounts.set(message.author, (emojiCounts.get(message.author) || 0) + segments.length);
+      if (!emojiSources.has(message.author)) emojiSources.set(message.author, []);
+      emojiSources.get(message.author).push(message.exportOrder);
+    }
     const laughs = message.text.match(/(?<![\p{L}\p{N}_])(?:haha|lol)(?![\p{L}\p{N}_])/giu) || [];
-    if (laughs.length) laughCounts.set(message.author, (laughCounts.get(message.author) || 0) + laughs.length);
+    if (laughs.length) {
+      laughCounts.set(message.author, (laughCounts.get(message.author) || 0) + laughs.length);
+      if (!laughSources.has(message.author)) laughSources.set(message.author, []);
+      laughSources.get(message.author).push(message.exportOrder);
+    }
   });
   const emojiWinner = chooseWinner(emojiCounts);
-  if (GRAPHEME_SEGMENTER) add("Emoji Addict", emojiWinner, emojiWinner ? `${emojiWinner.metric} emoji` : null, "That reaction had a reaction.", "graphemes in non-media messages");
+  if (GRAPHEME_SEGMENTER) add("Emoji Addict", emojiWinner, emojiWinner ? `${emojiWinner.metric} emoji` : null, "That reaction had a reaction.", "graphemes in non-media messages",
+    emojiWinner ? emojiSources.get(emojiWinner.name) : []);
   const laughWinner = chooseWinner(laughCounts);
-  add("Laugh Track", laughWinner, laughWinner ? `${laughWinner.metric} ${laughWinner.metric === 1 ? "occurrence" : "occurrences"}` : null, "The chat supplied its own laugh track.", "standalone haha/lol matches, case-insensitive");
+  add("Laugh Track", laughWinner, laughWinner ? `${laughWinner.metric} ${laughWinner.metric === 1 ? "occurrence" : "occurrences"}` : null,
+    "The chat supplied its own laugh track.", "standalone haha/lol matches, case-insensitive", laughWinner ? laughSources.get(laughWinner.name) : []);
   return awards;
 }
-
+function durationLabel(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remaining = seconds - hours * 3600 - minutes * 60;
+  return [hours ? `${hours} ${hours === 1 ? "hour" : "hours"}` : "", minutes ? `${minutes} ${minutes === 1 ? "minute" : "minutes"}` : "",
+    remaining || (!hours && !minutes) ? `${Number(remaining.toFixed(1))} ${remaining === 1 ? "second" : "seconds"}` : ""].filter(Boolean).join(" ");
+}
+function calculateActivity(messages) {
+  const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const cells = weekdays.map((day, weekday) => ({ day, weekday, hours: Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 })) }));
+  messages.forEach((message) => {
+    const weekday = (message.date.getDay() + 6) % 7;
+    cells[weekday].hours[message.date.getHours()].count += 1;
+  });
+  let busiest = null;
+  cells.forEach((row) => row.hours.forEach((cell) => {
+    if (cell.count && (!busiest || cell.count > busiest.count)) busiest = { day: row.day, weekday: row.weekday, hour: cell.hour, count: cell.count };
+  }));
+  const ordinal = (date) => Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
+  const localDateFromOrdinal = (value) => {
+    const utcDate = new Date(value * 86400000);
+    return new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate());
+  };
+  const mondayOrdinal = (date) => ordinal(date) - ((date.getDay() + 6) % 7);
+  const countsByWeek = new Map();
+  messages.forEach((message) => {
+    const week = mondayOrdinal(message.date);
+    countsByWeek.set(week, (countsByWeek.get(week) || 0) + 1);
+  });
+  const weekKeys = [...countsByWeek.keys()].sort((a, b) => a - b);
+  const latestMonday = mondayOrdinal(messages[messages.length - 1].date);
+  const firstShownMonday = latestMonday - 11 * 7;
+  const weeks = Array.from({ length: Math.min(12, Math.floor((latestMonday - weekKeys[0]) / 7) + 1) }, (_, index) => {
+    const startOrdinal = Math.max(weekKeys[0], firstShownMonday) + index * 7;
+    return { start: localDateFromOrdinal(startOrdinal), end: localDateFromOrdinal(startOrdinal + 6), count: countsByWeek.get(startOrdinal) || 0 };
+  });
+  return { cells, busiest, weeks, limited: weekKeys[0] < firstShownMonday };
+}
+function calculatePatterns(messages, people, totalMessages) {
+  const handoffs = [];
+  for (let index = 1; index < messages.length; index += 1) {
+    const previous = messages[index - 1];
+    const current = messages[index];
+    const elapsed = current.date.getTime() - previous.date.getTime();
+    if (previous.author !== current.author && elapsed >= 0 && elapsed < SESSION_GAP_MS) {
+      handoffs.push({ laterAuthor: current.author, gapSeconds: elapsed / 1000, previous, current });
+    }
+  }
+  const byAuthor = new Map();
+  handoffs.forEach((pair) => {
+    if (!byAuthor.has(pair.laterAuthor)) byAuthor.set(pair.laterAuthor, []);
+    byAuthor.get(pair.laterAuthor).push(pair);
+  });
+  const participants = people.map((person) => {
+    const pairs = byAuthor.get(person.name) || [];
+    const gaps = pairs.map((pair) => pair.gapSeconds).sort((a, b) => a - b);
+    const middle = Math.floor(gaps.length / 2);
+    const medianGapSeconds = gaps.length < 2 ? null : gaps.length % 2 ? gaps[middle] : (gaps[middle - 1] + gaps[middle]) / 2;
+    return { name: person.name, messages: person.messages, share: person.messages / totalMessages * 100, handoffCount: pairs.length, medianGapSeconds, handoffs: pairs };
+  });
+  const eligible = participants.filter((person) => person.medianGapSeconds !== null)
+    .sort((a, b) => a.medianGapSeconds - b.medianGapSeconds || compareNames(a.name, b.name));
+  return { participants, handoffs, winner: eligible[0] || null };
+}
 function calculateStory(messages) {
   const days = new Map();
   const months = new Map();
@@ -232,7 +294,10 @@ function calculateStory(messages) {
 export function analyzeChat(chat) {
   const messages = authoredMessages(chat);
   if (!messages.length) return null;
-  return { messages, stats: calculateStats(messages), awards: calculateAwards(messages), story: calculateStory(messages) };
+  const stats = calculateStats(messages);
+  const activity = calculateActivity(messages);
+  const patterns = calculatePatterns(messages, stats.people, stats.totalMessages);
+  return { messages, stats, activity, patterns, awards: calculateAwards(messages, patterns), story: calculateStory(messages) };
 }
 
 export const ANALYSIS_STOPWORDS = STOPWORDS;

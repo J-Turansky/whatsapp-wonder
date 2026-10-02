@@ -22,6 +22,9 @@ let appliedFilter = { ...filterSettings };
 let activeView = "stats";
 let messageQuery = "";
 let messagePage = 1;
+let evidenceContext = null;
+let reportSnapshot = null;
+let reportReturnView = "stats";
 
 function formatChangelogDate(isoDate) {
   const parts = isoDate.split("-");
@@ -58,6 +61,9 @@ function clearChat() {
   appliedFilter = { ...filterSettings };
   messageQuery = "";
   messagePage = 1;
+  evidenceContext = null;
+  reportSnapshot = null;
+  document.body.classList.remove("report-open");
   activeView = "stats";
   renderImportPanel();
 }
@@ -261,7 +267,7 @@ function appendBarChart(section, title, description, values) {
   chart.appendChild(list);
   section.appendChild(chart);
 }
-function renderStats(data) {
+function renderStats(data, activity, patterns) {
   const section = element("section", "analysis-panel stats-panel");
   section.setAttribute("aria-labelledby", "stats-heading");
   const heading = element("h2", "", "Chat statistics");
@@ -279,14 +285,18 @@ function renderStats(data) {
   table.className = "participant-table";
   const head = document.createElement("thead");
   const headRow = document.createElement("tr");
-  ["Participant", "Messages", "Words", "Media", "Share of chat"].forEach((text) => headRow.appendChild(element("th", "", text)));
+  ["Participant", "Messages", "Words", "Media", "Share of chat", "Handoffs as later author", "Median observed gap"].forEach((text) => headRow.appendChild(element("th", "", text)));
   head.appendChild(headRow);
   table.appendChild(head);
   const body = document.createElement("tbody");
   data.people.forEach((person) => {
     const row = document.createElement("tr");
     row.appendChild(element("th", "", person.name));
-    [person.messages, person.words, person.media, `${person.messages.toLocaleString("en-US")} (${(person.messages / data.totalMessages * 100).toFixed(1)}%)`]
+    const pattern = patterns.participants.find((item) => item.name === person.name);
+    const median = data.people.length === 1 ? "No cross-participant handoffs in this scope"
+      : pattern.medianGapSeconds === null ? "Insufficient data"
+        : `${formatDuration(pattern.medianGapSeconds)} (${pattern.handoffCount} samples)`;
+    [person.messages, person.words, person.media, `${person.messages.toLocaleString("en-US")} (${(person.messages / data.totalMessages * 100).toFixed(1)}%)`, pattern.handoffCount, median]
       .forEach((value) => row.appendChild(element("td", "", String(value))));
     body.appendChild(row);
   });
@@ -294,6 +304,7 @@ function renderStats(data) {
   tableWrap.appendChild(table);
   peopleSection.appendChild(tableWrap);
   section.appendChild(peopleSection);
+  renderConversationPatterns(section, patterns);
   appendBarChart(section, "Messages by hour", "Local hour of each authored message; each bar is relative to the busiest hour.", data.hourly);
   appendBarChart(section, "Messages by weekday", "Local weekday of each authored message; each bar is relative to the busiest weekday.", data.weekdays);
 
@@ -316,7 +327,64 @@ function renderStats(data) {
   } else emojiSection.appendChild(element("p", "", "No emoji found in non-media messages."));
   rankings.appendChild(emojiSection);
   section.appendChild(rankings);
+  renderActivityHeatmap(section, activity);
+  renderWeeklyTrend(section, activity);
   return section;
+}
+function formatDuration(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remaining = seconds - hours * 3600 - minutes * 60;
+  return [hours ? `${hours} ${hours === 1 ? "hour" : "hours"}` : "", minutes ? `${minutes} ${minutes === 1 ? "minute" : "minutes"}` : "", remaining || (!hours && !minutes) ? `${Number(remaining.toFixed(1))} ${remaining === 1 ? "second" : "seconds"}` : ""].filter(Boolean).join(" ");
+}
+function renderConversationPatterns(parent, patterns) {
+  const section = element("section", "chart-section conversation-patterns");
+  section.appendChild(element("h3", "", "Conversation patterns"));
+  section.appendChild(element("p", "chart-description", "These are gaps between adjacent matching messages in this scope, attributed to the later author; they are not verified replies and do not describe intent or sentiment."));
+  if (patterns.participants.length === 1) section.appendChild(element("p", "", "No cross-participant handoffs in this scope."));
+  const bars = element("div", "share-bars");
+  patterns.participants.forEach((person) => {
+    const row = element("div", "share-bar-row");
+    const label = element("span", "share-label", `${person.name} · ${person.messages} ${person.messages === 1 ? "message" : "messages"}`);
+    const track = element("span", "share-track"); track.setAttribute("aria-hidden", "true");
+    const fill = element("span", "share-fill"); fill.style.width = `${person.share}%`; track.appendChild(fill);
+    row.append(label, track, element("span", "share-value", `${person.share.toFixed(1)}%`)); bars.appendChild(row);
+  });
+  section.appendChild(bars);
+  parent.appendChild(section);
+}
+function renderActivityHeatmap(parent, activity) {
+  const section = element("section", "chart-section activity-heatmap");
+  section.appendChild(element("h3", "", "Weekly activity heatmap"));
+  section.appendChild(element("p", "chart-description", "Counts use each message’s local weekday and hour, including media. Brighter cells mean more messages; the count is always shown."));
+  const peak = activity.busiest;
+  section.appendChild(element("p", "busiest-hour", `Busiest weekday-hour: ${peak.day} at ${String(peak.hour).padStart(2, "0")}:00 (${peak.count} ${peak.count === 1 ? "message" : "messages"}).`));
+  const scroller = element("div", "heatmap-scroll"); scroller.tabIndex = 0; scroller.setAttribute("role", "region"); scroller.setAttribute("aria-label", "Scrollable weekday by local-hour activity table");
+  const table = document.createElement("table"); table.className = "heatmap-table";
+  const caption = element("caption", "", "Authored message counts by local weekday and hour"); table.appendChild(caption);
+  const thead = document.createElement("thead"); const headerRow = document.createElement("tr"); headerRow.appendChild(element("th", "", "Weekday / hour"));
+  for (let hour = 0; hour < 24; hour += 1) { const th = element("th", "", `${String(hour).padStart(2, "0")}:00`); th.scope = "col"; headerRow.appendChild(th); }
+  thead.appendChild(headerRow); table.appendChild(thead);
+  const max = Math.max(1, ...activity.cells.flatMap((row) => row.hours.map((cell) => cell.count)));
+  const body = document.createElement("tbody");
+  activity.cells.forEach((row) => {
+    const tr = document.createElement("tr"); const day = element("th", "", row.day); day.scope = "row"; tr.appendChild(day);
+    row.hours.forEach((cell) => { const td = element("td", "heatmap-cell", String(cell.count)); const alpha = cell.count ? 0.06 + 0.25 * cell.count / max : 0; td.style.backgroundColor = `rgba(18, 140, 126, ${alpha})`; td.setAttribute("aria-label", `${row.day}, ${String(cell.hour).padStart(2, "0")}:00, ${cell.count} ${cell.count === 1 ? "message" : "messages"}`); tr.appendChild(td); });
+    body.appendChild(tr);
+  });
+  table.appendChild(body); scroller.appendChild(table); section.appendChild(scroller); parent.appendChild(section);
+}
+function renderWeeklyTrend(parent, activity) {
+  const section = element("section", "chart-section weekly-trend");
+  section.appendChild(element("h3", "", activity.limited ? "Last 12 weeks of matching messages" : "Weekly activity trend"));
+  section.appendChild(element("p", "chart-description", "Each row covers Monday through Sunday in local calendar dates; quiet weeks between the first and last match are included."));
+  const list = element("ol", "weekly-trend-list");
+  activity.weeks.forEach((week) => {
+    const item = document.createElement("li");
+    item.append(element("span", "week-range", `${formatDate(week.start)} – ${formatDate(week.end)}`), element("span", "week-count", `${week.count} ${week.count === 1 ? "message" : "messages"}`));
+    list.appendChild(item);
+  });
+  section.appendChild(list); parent.appendChild(section);
 }
 function renderAwards(awards) {
   const section = element("section", "analysis-panel awards-panel");
@@ -324,7 +392,7 @@ function renderAwards(awards) {
   const heading = element("h2", "", "Fun facts and joke awards");
   heading.id = "awards-heading";
   section.appendChild(heading);
-  section.appendChild(element("p", "eligibility-note", "Awards only appear when the chat contains a qualifying event. Message text excludes media placeholders; reply times use observed messages in sessions under six hours apart."));
+  section.appendChild(element("p", "eligibility-note", "Awards only appear when the chat contains a qualifying event. Handoff metrics use immediately adjacent cross-author messages less than six hours apart; they are observed gaps, not verified replies."));
   const grid = element("div", "award-grid");
   if (!awards.length) grid.appendChild(element("p", "friendly-empty", "Not enough chat yet for an award. Keep chatting and there may be one next time."));
   awards.forEach((award, index) => {
@@ -356,22 +424,38 @@ function renderAwards(awards) {
       }
     });
     card.append(copy, feedback);
+    if (award.supportMessageIds?.length) {
+      const evidence = element("button", "secondary-button evidence-button", "See messages"); evidence.type = "button"; evidence.id = `award-evidence-${index}`; evidence.setAttribute("aria-label", `See messages for ${award.title} award`);
+      evidence.addEventListener("click", () => openEvidence(`${award.title} award`, award.supportMessageIds, award.supportPairs, "awards", evidence.id));
+      card.appendChild(evidence);
+    }
     grid.appendChild(card);
   });
   section.appendChild(grid);
   return section;
 }
-function renderStory(story) {
+function addEvidenceAction(parent, label, title, sourceIds, pairCount, view, id, exact = false) {
+  if (!sourceIds.length) return;
+  const button = element("button", "secondary-button evidence-button", "See messages");
+  button.type = "button"; button.id = id; button.setAttribute("aria-label", `See messages for ${label}`);
+  button.addEventListener("click", () => openEvidence(title, sourceIds, pairCount, view, id, exact));
+  parent.appendChild(button);
+}
+function renderStory(story, messages) {
   const section = element("section", "analysis-panel story-panel");
   section.setAttribute("aria-labelledby", "story-heading");
-  const heading = element("h2", "", "Your chat story");
-  heading.id = "story-heading";
-  section.appendChild(heading);
+  const heading = element("h2", "", "Your chat story"); heading.id = "story-heading"; section.appendChild(heading);
   const intro = element("p", "story-intro", `This chat began on ${formatDate(story.first.date)}${story.first.author ? ` with ${story.first.author}` : ""}.`);
-  section.appendChild(intro);
+  const firstEvidence = element("div", "story-evidence-fact"); firstEvidence.appendChild(intro);
+  addEvidenceAction(firstEvidence, "first message", "First message", [story.first.exportOrder], 0, "story", "story-first-evidence", true);
+  section.appendChild(firstEvidence);
   const narrative = element("ul", "story-facts");
-  narrative.appendChild(element("li", "", `The busiest day was ${formatDate(story.busiestDay.date)}, with ${story.busiestDay.count} ${story.busiestDay.count === 1 ? "message" : "messages"}.`));
-  narrative.appendChild(element("li", "", `${formatMonth(story.busiestMonth.date)} was the busiest month, with ${story.busiestMonth.count} ${story.busiestMonth.count === 1 ? "message" : "messages"}.`));
+  const dayMessages = messages.filter((message) => localDateKey(message.date) === localDateKey(story.busiestDay.date));
+  const dayFact = element("li", "story-evidence-fact"); dayFact.appendChild(element("span", "", `The busiest day was ${formatDate(story.busiestDay.date)}, with ${story.busiestDay.count} ${story.busiestDay.count === 1 ? "message" : "messages"}.`));
+  addEvidenceAction(dayFact, "busiest day", "Busiest day", dayMessages.map((message) => message.exportOrder), 0, "story", "story-day-evidence"); narrative.appendChild(dayFact);
+  const monthMessages = messages.filter((message) => message.date.getFullYear() === story.busiestMonth.date.getFullYear() && message.date.getMonth() === story.busiestMonth.date.getMonth());
+  const monthFact = element("li", "story-evidence-fact"); monthFact.appendChild(element("span", "", `${formatMonth(story.busiestMonth.date)} was the busiest month, with ${story.busiestMonth.count} ${story.busiestMonth.count === 1 ? "message" : "messages"}.`));
+  addEvidenceAction(monthFact, "busiest month", "Busiest month", monthMessages.map((message) => message.exportOrder), 0, "story", "story-month-evidence"); narrative.appendChild(monthFact);
   if (!story.quietest || story.quietest.silentDays === 0) narrative.appendChild(element("li", "", "No full silent days between active dates."));
   else narrative.appendChild(element("li", "", `The quietest stretch had ${story.quietest.silentDays} full silent ${story.quietest.silentDays === 1 ? "day" : "days"} between ${formatDate(story.quietest.start)} and ${formatDate(story.quietest.end)}.`));
   narrative.appendChild(element("li", "", `The longest active streak was ${story.streak.length} ${story.streak.length === 1 ? "day" : "days"}, from ${formatDate(story.streak.start)} to ${formatDate(story.streak.end)}.`));
@@ -381,16 +465,9 @@ function renderStory(story) {
   timeline.appendChild(element("h3", "", "Month-by-month timeline"));
   timeline.appendChild(element("p", "chart-description", "Authored message counts from the first through last active month, including months with no messages."));
   const list = element("ol", "timeline-list");
-  story.timeline.forEach((month) => {
-    const item = document.createElement("li");
-    item.append(element("span", "timeline-month", formatMonth(month.date)), element("span", "timeline-count", `${month.count} ${month.count === 1 ? "message" : "messages"}`));
-    list.appendChild(item);
-  });
-  timeline.appendChild(list);
-  section.appendChild(timeline);
-  return section;
-}
-function selectView(name, focus = false) {
+  story.timeline.forEach((month) => { const item = document.createElement("li"); item.append(element("span", "timeline-month", formatMonth(month.date)), element("span", "timeline-count", `${month.count} ${month.count === 1 ? "message" : "messages"}`)); list.appendChild(item); });
+  timeline.appendChild(list); section.appendChild(timeline); return section;
+}function selectView(name, focus = false) {
   activeView = name;
   const buttons = Array.from(document.querySelectorAll("[data-view]"));
   buttons.forEach((button) => {
@@ -442,10 +519,10 @@ function renderConfirmation(chat) {
     if (!validDateValue(from.value) || !validDateValue(to.value)) { error.textContent = "Enter valid calendar dates for both filter boundaries."; return; }
     if (from.value && to.value && from.value > to.value) { error.textContent = "From must be on or before To. Filters were not applied."; return; }
     filterSettings = { from: from.value, to: to.value, participant: participant.value };
-    appliedFilter = { ...filterSettings }; messagePage = 1; renderConfirmation(chat);
+    appliedFilter = { ...filterSettings }; messagePage = 1; evidenceContext = null; reportSnapshot = null; renderConfirmation(chat);
   });
   clear.addEventListener("click", () => {
-    filterSettings = { from: "", to: "", participant: "" }; appliedFilter = { ...filterSettings }; messagePage = 1; renderConfirmation(chat);
+    filterSettings = { from: "", to: "", participant: "" }; appliedFilter = { ...filterSettings }; messagePage = 1; evidenceContext = null; reportSnapshot = null; renderConfirmation(chat);
   });
   workspace.appendChild(filterBar);
   const scoped = chat.messages.filter((message) => {
@@ -456,6 +533,11 @@ function renderConfirmation(chat) {
   const dateScope = appliedFilter.from || appliedFilter.to
     ? `${appliedFilter.from ? formatDate(new Date(`${appliedFilter.from}T00:00:00`)) : "Any date"} to ${appliedFilter.to ? formatDate(new Date(`${appliedFilter.to}T00:00:00`)) : "Any date"}` : "All dates";
   scope.textContent = `${dateScope} · ${appliedFilter.participant || "All participants"} · ${scoped.length.toLocaleString("en-US")} ${scoped.length === 1 ? "message" : "messages"}`;
+  const analysis = scoped.length ? analyzeChat({ messages: scoped }) : null;
+  const reportButton = element("button", "secondary-button report-open-button", "Preview report / Print or save PDF");
+  reportButton.type = "button"; reportButton.id = "report-open-btn";
+  reportButton.addEventListener("click", () => openReportPreview(chat, scoped, analysis));
+  filterBar.appendChild(reportButton);
   const nav = element("div", "view-nav"); nav.setAttribute("role", "tablist"); nav.setAttribute("aria-label", "Chat views");
   const viewNames = [["stats", "Stats"], ["awards", "Awards"], ["story", "Story"], ["messages", "Messages"]];
   viewNames.forEach(([view, label], index) => {
@@ -476,27 +558,55 @@ function renderConfirmation(chat) {
     const empty = () => { const panel = element("section", "analysis-panel scoped-empty"); panel.appendChild(element("p", "", "No authored messages match the current filters. Adjust the date or participant filters, or clear filters to see the full chat.")); return panel; };
     workspace.append(makePanel("stats", empty(), activeView !== "stats"), makePanel("awards", empty(), activeView !== "awards"), makePanel("story", empty(), activeView !== "story"), makePanel("messages", empty(), activeView !== "messages"));
   } else {
-    const analysis = analyzeChat({ messages: scoped });
-    workspace.append(makePanel("stats", renderStats(analysis.stats), activeView !== "stats"));
+    workspace.append(makePanel("stats", renderStats(analysis.stats, analysis.activity, analysis.patterns), activeView !== "stats"));
     workspace.append(makePanel("awards", renderAwards(analysis.awards), activeView !== "awards"));
-    workspace.append(makePanel("story", renderStory(analysis.story), activeView !== "story"));
-    workspace.append(makePanel("messages", renderMessages(scoped), activeView !== "messages"));
+    workspace.append(makePanel("story", renderStory(analysis.story, analysis.messages), activeView !== "story"));
+    workspace.append(makePanel("messages", renderMessages(analysis.messages), activeView !== "messages"));
   }
   loaded.appendChild(workspace); appMain.appendChild(loaded); title.focus();
 }
+function openEvidence(title, sourceIds, pairCount, returnView, originFocusId, exact = false) {
+  evidenceContext = { title, sourceIds: [...new Set(sourceIds)], pairCount, returnView, originFocusId, exact, previousQuery: messageQuery, previousPage: messagePage };
+  messagePage = 1; activeView = "messages"; renderConfirmation(confirmedChat); selectView("messages");
+  document.getElementById("evidence-heading")?.focus();
+}
+function closeEvidence() {
+  if (!evidenceContext) return;
+  const context = evidenceContext;
+  evidenceContext = null; messageQuery = context.previousQuery; messagePage = context.previousPage; activeView = context.returnView;
+  renderConfirmation(confirmedChat);
+  document.getElementById(context.originFocusId)?.focus();
+}
 function renderMessages(messages) {
   const section = element("section", "analysis-panel messages-panel");
-  section.appendChild(element("h2", "", "Messages"));
-  const form = element("form", "message-search");
-  const label = element("label", "", "Search message text"); const input = document.createElement("input"); input.type = "search"; input.id = "message-search-input"; input.value = messageQuery; label.htmlFor = input.id;
-  input.addEventListener("input", () => { messagePage = 1; });
-  const actions = element("div", "filter-actions"); const search = element("button", "primary-button", "Search"); search.type = "submit"; const clear = element("button", "secondary-button", "Clear search"); clear.type = "button"; actions.append(search, clear); form.append(label, input, actions); section.appendChild(form);
-  form.addEventListener("submit", (event) => { event.preventDefault(); messageQuery = input.value.trim(); messagePage = 1; renderConfirmation(confirmedChat); activeView = "messages"; selectView("messages"); document.getElementById("message-search-input")?.focus(); });
-  clear.addEventListener("click", () => { messageQuery = ""; messagePage = 1; renderConfirmation(confirmedChat); activeView = "messages"; selectView("messages"); document.getElementById("message-search-input")?.focus(); });
-  const normalizedQuery = messageQuery.toLowerCase();
-  const matches = [...messages].sort((a, b) => a.date - b.date).filter((message) => (!normalizedQuery || (!message.isMedia && message.text.toLowerCase().includes(normalizedQuery))));
-  section.appendChild(element("p", "message-result-count", `${matches.length.toLocaleString("en-US")} matching ${matches.length === 1 ? "message" : "messages"}`));
-  if (!matches.length) { section.appendChild(element("p", "friendly-empty", "No messages match this search. Clear the search to show all messages in this scope.")); return section; }
+  const heading = element("h2", "", evidenceContext ? `Supporting messages for ${evidenceContext.title}` : "Messages");
+  if (evidenceContext) heading.id = "evidence-heading";
+  section.appendChild(heading);
+  let matches;
+  if (evidenceContext) {
+    const sources = new Set(evidenceContext.sourceIds);
+    matches = messages.filter((message) => sources.has(message.exportOrder));
+    const banner = element("div", "evidence-banner");
+    banner.appendChild(element("p", "", evidenceContext.exact ? "One exact source message is shown." : "This is an aggregate supporting set, not one message presented as proof."));
+    if (evidenceContext.pairCount) banner.appendChild(element("p", "", `${evidenceContext.pairCount} qualifying pairs; showing ${matches.length} unique matching messages.`));
+    if (evidenceContext.previousQuery) banner.appendChild(element("p", "", "Your Messages search is paused for this evidence list and will return when you go back."));
+    const back = element("button", "secondary-button", `Back to ${evidenceContext.returnView === "awards" ? "Awards" : "Story"}`); back.type = "button"; back.addEventListener("click", closeEvidence); banner.appendChild(back); section.appendChild(banner);
+  } else {
+    const form = element("form", "message-search");
+    const label = element("label", "", "Search message text"); const input = document.createElement("input"); input.type = "search"; input.id = "message-search-input"; input.value = messageQuery; label.htmlFor = input.id;
+    input.addEventListener("input", () => { messagePage = 1; });
+    const actions = element("div", "filter-actions"); const search = element("button", "primary-button", "Search"); search.type = "submit"; const clear = element("button", "secondary-button", "Clear search"); clear.type = "button"; actions.append(search, clear); form.append(label, input, actions); section.appendChild(form);
+    form.addEventListener("submit", (event) => { event.preventDefault(); messageQuery = input.value.trim(); messagePage = 1; renderConfirmation(confirmedChat); activeView = "messages"; selectView("messages"); document.getElementById("message-search-input")?.focus(); });
+    clear.addEventListener("click", () => { messageQuery = ""; messagePage = 1; renderConfirmation(confirmedChat); activeView = "messages"; selectView("messages"); document.getElementById("message-search-input")?.focus(); });
+    const normalizedQuery = messageQuery.toLowerCase();
+    matches = [...messages].filter((message) => (!normalizedQuery || (!message.isMedia && message.text.toLowerCase().includes(normalizedQuery))));
+  }
+  matches = [...matches].sort((a, b) => a.date.getTime() - b.date.getTime() || a.exportOrder - b.exportOrder);
+  section.appendChild(element("p", "message-result-count", `${matches.length.toLocaleString("en-US")} ${evidenceContext ? "supporting" : "matching"} ${matches.length === 1 ? "message" : "messages"}`));
+  if (!matches.length) {
+    section.appendChild(element("p", "friendly-empty", evidenceContext ? "No supporting messages remain in the current scope." : "No messages match this search. Clear the search to show all messages in this scope."));
+    return section;
+  }
   const pageCount = Math.ceil(matches.length / 50); messagePage = Math.min(messagePage, pageCount);
   const list = element("ol", "message-list");
   matches.slice((messagePage - 1) * 50, messagePage * 50).forEach((message) => {
@@ -510,6 +620,62 @@ function renderMessages(messages) {
   previous.addEventListener("click", () => { messagePage -= 1; renderConfirmation(confirmedChat); activeView = "messages"; selectView("messages"); });
   next.addEventListener("click", () => { messagePage += 1; renderConfirmation(confirmedChat); activeView = "messages"; selectView("messages"); });
   pagination.append(previous, pageText, next); section.appendChild(pagination); return section;
+}
+function reportScopeText(filter) {
+  const dates = filter.from || filter.to ? `${filter.from ? formatDate(new Date(`${filter.from}T00:00:00`)) : "Any date"} to ${filter.to ? formatDate(new Date(`${filter.to}T00:00:00`)) : "Any date"}` : "All dates";
+  return `${dates} · ${filter.participant || "All participants"}`;
+}
+function addReportTable(parent, headings, rows) {
+  const table = document.createElement("table"); table.className = "report-table";
+  const thead = document.createElement("thead"); const head = document.createElement("tr"); headings.forEach((label) => head.appendChild(element("th", "", label))); thead.appendChild(head); table.appendChild(thead);
+  const tbody = document.createElement("tbody"); rows.forEach((values) => { const tr = document.createElement("tr"); values.forEach((value) => tr.appendChild(element("td", "", String(value)))); tbody.appendChild(tr); }); table.appendChild(tbody); parent.appendChild(table);
+}
+function reportSection(root, title) { const section = element("section", "report-section"); section.appendChild(element("h2", "", title)); root.appendChild(section); return section; }
+function openReportPreview(chat, messages, analysis) {
+  reportReturnView = activeView;
+  reportSnapshot = { chat, scope: { ...appliedFilter }, analysis };
+  document.body.classList.add("report-open");
+  appMain.replaceChildren();
+  const report = element("article", "card report-preview"); report.id = "report-preview"; report.setAttribute("aria-labelledby", "report-title");
+  const heading = element("h1", "", "WhatsApp Wonder insights report"); heading.id = "report-title"; heading.tabIndex = -1; report.appendChild(heading);
+  report.appendChild(element("p", "report-privacy-note", "Includes participant names and chat-derived metrics. No raw messages. Once saved/shared, your file is your responsibility."));
+  report.appendChild(element("p", "", `Scope: ${reportScopeText(appliedFilter)} · ${messages.length.toLocaleString("en-US")} ${messages.length === 1 ? "matching authored message" : "matching authored messages"}.`));
+  report.appendChild(element("p", "", `Confirmed date interpretation: ${chat.dateOrder === "month-first" ? "Month/day/year" : "Day/month/year"}.`));
+  report.appendChild(element("p", "", `Whole-import quality (not scope counts): ${chat.systemCount} system entries; ${chat.skippedLines} skipped nonempty lines.`));
+  report.appendChild(element("p", "report-omissions", "Top-word and emoji rankings are omitted from this report by default. Search terms and raw message text are never included."));
+  if (!analysis) report.appendChild(element("p", "report-empty", "There are no insights to report because no authored messages match the current scope. Adjust or clear the filters first."));
+  else {
+    const stats = reportSection(report, "Statistics");
+    stats.appendChild(element("p", "", `${analysis.stats.totalMessages} messages · ${analysis.stats.totalWords} words · ${analysis.stats.totalMedia} media messages · ${analysis.stats.activeDays} active days.`));
+    addReportTable(stats, ["Participant", "Messages", "Words", "Media", "Share"], analysis.stats.people.map((person) => [person.name, person.messages, person.words, person.media, `${(person.messages / analysis.stats.totalMessages * 100).toFixed(1)}%`]));
+    const awards = reportSection(report, "Eligible awards");
+    if (analysis.awards.length) addReportTable(awards, ["Award", "Participant", "Metric", "Measure"], analysis.awards.map((award) => [award.title, award.name, award.metric, award.measure]));
+    else awards.appendChild(element("p", "", "No awards met their eligibility rules in this scope."));
+    const story = reportSection(report, "Story and monthly timeline");
+    story.appendChild(element("p", "", `The first matching message was on ${formatDate(analysis.story.first.date)}${analysis.story.first.author ? ` with ${analysis.story.first.author}` : ""}.`));
+    story.appendChild(element("p", "", `Busiest day: ${formatDate(analysis.story.busiestDay.date)} (${analysis.story.busiestDay.count} messages); busiest month: ${formatMonth(analysis.story.busiestMonth.date)} (${analysis.story.busiestMonth.count} messages).`));
+    story.appendChild(element("p", "", !analysis.story.quietest || analysis.story.quietest.silentDays === 0 ? "No full silent days between active dates." : `Quietest gap: ${analysis.story.quietest.silentDays} full days between ${formatDate(analysis.story.quietest.start)} and ${formatDate(analysis.story.quietest.end)}.`));
+    addReportTable(story, ["Month", "Matching authored messages"], analysis.story.timeline.map((month) => [formatMonth(month.date), month.count]));
+    const activity = reportSection(report, "Weekly activity highlights");
+    const peak = analysis.activity.busiest;
+    activity.appendChild(element("p", "", `Busiest weekday-hour: ${peak.day} at ${String(peak.hour).padStart(2, "0")}:00 (${peak.count} messages).`));
+    const nonzero = analysis.activity.cells.flatMap((row) => row.hours.filter((cell) => cell.count).map((cell) => [`${row.day} ${String(cell.hour).padStart(2, "0")}:00`, cell.count]));
+    if (nonzero.length) addReportTable(activity, ["Local weekday and hour", "Messages"], nonzero);
+    activity.appendChild(element("h3", "", "Weekly trend (Monday–Sunday local dates)"));
+    addReportTable(activity, ["Inclusive week", "Matching messages"], analysis.activity.weeks.map((week) => [`${formatDate(week.start)} – ${formatDate(week.end)}`, week.count]));
+    const patterns = reportSection(report, "Conversation patterns");
+    patterns.appendChild(element("p", "", "Observed gaps between adjacent matching messages, attributed to the later author; these are not verified replies."));
+    addReportTable(patterns, ["Participant", "Messages", "Share", "Handoffs", "Median gap"], analysis.patterns.participants.map((person) => [person.name, person.messages, `${person.share.toFixed(1)}%`, person.handoffCount, person.medianGapSeconds === null ? (analysis.patterns.participants.length === 1 ? "No cross-participant handoffs" : "Insufficient data") : `${formatDuration(person.medianGapSeconds)} (${person.handoffCount} samples)`]));
+  }
+  const actions = element("div", "report-actions");
+  if (analysis) { const print = element("button", "primary-button", "Print or save as PDF"); print.type = "button"; print.addEventListener("click", () => { if (reportSnapshot?.chat === confirmedChat && reportSnapshot.analysis && JSON.stringify(reportSnapshot.scope) === JSON.stringify(appliedFilter)) window.print(); }); actions.appendChild(print); }
+  const back = element("button", "secondary-button", "Close report and go back"); back.type = "button"; back.addEventListener("click", closeReportPreview); actions.appendChild(back); report.appendChild(actions);
+  appMain.appendChild(report); heading.focus();
+}
+function closeReportPreview() {
+  if (!reportSnapshot) return;
+  reportSnapshot = null; document.body.classList.remove("report-open"); activeView = reportReturnView;
+  renderConfirmation(confirmedChat); document.getElementById("report-open-btn")?.focus();
 }
 function selectInfoTab(tab) {
   tabs.forEach((item) => {
@@ -545,3 +711,6 @@ dialog.addEventListener("click", (event) => { if (event.target === dialog) dialo
 renderChangelog();
 if (getChat()) renderConfirmation(getChat());
 else renderImportPanel();
+
+
+
